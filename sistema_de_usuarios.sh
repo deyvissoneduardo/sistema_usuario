@@ -17,6 +17,9 @@
 #   v1.0 09/02/2021, Deyvisson:
 #       - Início do programa
 #       - Funcionalidades de Inserir e excluir
+#	v1.1 13/02/2021, Deyvisson:
+#	    - Implementado Dialog
+#       - Menu Principal
 # ------------------------------------------------------------------------ #
 # Testado em:
 #   bash 5.0.8
@@ -36,29 +39,15 @@ TEMP=temp.$$ # pid
 [ ! -e "$DATABASE" ] && echo -e "${MSGN_ERROR}Arquivo não encontrado" && exit 1
 [ ! -r "$DATABASE" ] && echo -e "${MSGN_ERROR}Não tem permissão de leitura" && exit 1
 [ ! -w "$DATABASE" ] && echo -e "${MSGN_ERROR}Não tem permissão de escrita" && exit 1
+# dialog
+[ ! -x "$(which dialog)" ] && sudo apt install -y dialog 1> /dev/null 2>1
 # ------------------------------------------------------------------------ #
 
 # ------------------------------- FUNÇÕES ----------------------------------------- #
-FormatDataUser(){
-    local id="$(echo  $1 | cut -d $SEP -f 1)"
-    local name="$(echo $1 | cut -d $SEP -f 2)"
-    local email="$(echo $1 | cut -d $SEP -f 3)"
-
-    echo -e "${NEGRITO}ID: $id"
-    echo -e "${NEGRITO}name: $name"
-    echo -e "${NEGRITO}E-Mail: $email" 
-}
-
 ListUser(){
-    while read -r rows
-    do
-        #tem comentario
-        [ "$(echo $rows | cut -c1)" = "#" ] && continue
-        [ ! "$rows" ] && continue
-        
-        FormatDataUser "$rows"
-    done < "$DATABASE"
-	OrderList
+	egrep -v "^#|^$" "$DATABASE" | tr : ' ' > $TEMP
+	dialog --title "Lista de Usuarios" --textbox "$TEMP"  20 40
+	rm -f "$TEMP"
 }
 
 ExistsUset(){
@@ -66,28 +55,34 @@ ExistsUset(){
 }
 
 InsertUser(){
-	# ja e cadastrado
-	local name="$(echo $1 | cut -d $SEP -f 2)"
+	local last_id="$(egrep -v "^#|^$" "$DATABASE" | tail -n 1 | cut -d $SEP -f 1)"
+	local next_id=$(($last_id+1))
 
-	if ExistsUset "$name"
-	then
-		echo -e "${MSGN_ERROR}Usuario ja cadastrado"
-	else
-		echo "$*" >> "$DATABASE"
-		echo -e "${MSGN_SUCESS}Usuario Cadastrado com Sucesso!!!"
-	fi
-	OrderList
+	local name=$(dialog --title "Cadastro de Usuario" --stdout --inputbox "Digite o seu nome" 0 0)
+	[ ! "$name" ] && exit 1
+	ExistsUset "$name" && {
+		dialog --title "Error!!!" --msgbox "Usuario ja cadastrado" 6 40
+		exit 1
+	} 
+
+	local email=$(dialog --title "Cadastro de Usuario" --stdout --inputbox "Digite o seu e-mail" 0 0)
+
+	echo "$next_id$SEP$name$SEP$email" >> "$DATABASE"
+	dialog --title "Sucesso!!!" --msgbox "Cadastrado!!" 6 40
+	ListUser
 }
 
 DeleteUser(){
-	# ja existe
-	ExistsUset "$1" || return 
+	# busca por id
+	local user=$(egrep -v "^#|^$" "banco.txt" | sort -h | cut -d : -f 1,2 | sed 's/:/ "/;s/$/"/')
+	local id_user=$(eval dialog --stdout --menu \"Escolha um usuario:\" 0 0 0 $user)
 
-	grep -i -v "$1$SEP" "$DATABASE" > "$TEMP"
+	# remove
+	grep -i -v "^$id_user$SEP" "$DATABASE" > "$TEMP"
 	mv "$TEMP" "$DATABASE"
 
-	echo -e "${MSGN_SUCESS}Usuario excluido"
-	OrderList
+	dialog --msgbox "Excluido!!" 6 40
+	ListUser
 }
 
 OrderList(){
@@ -97,4 +92,20 @@ OrderList(){
 # ------------------------------------------------------------------------ #
 
 # ------------------------------- EXECUÇÃO ----------------------------------------- #
+while :
+do
+	action=$(dialog --title "Sistema Usuarios" \
+					--stdout \
+					--menu "Escolha uma das opções abaixo:" \
+					0 0 0 \
+					listar "Lista todos usuarios" \
+					remover "Deleta um usuario" \
+					inserir "Inserir um novo usuario")
+
+	case $action in
+		listar)  ListUser ;;
+		inserir) InsertUser ;;
+		remover) DeleteUser ;;
+	esac				
+done
 # ------------------------------------------------------------------------ #
