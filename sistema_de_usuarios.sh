@@ -59,7 +59,7 @@ InsertUser(){
 	local next_id=$(($last_id+1))
 
 	local name=$(dialog --title "Cadastro de Usuario" --stdout --inputbox "Digite o seu nome" 0 0)
-	# echo $name
+	[ ! "$name" ] && exit 1
 	ExistsUset "$name" && {
 		dialog --title "Error!!!" --msgbox "Usuario ja cadastrado" 6 40
 		exit 1
@@ -73,14 +73,16 @@ InsertUser(){
 }
 
 DeleteUser(){
-	# ja existe
-	ExistsUset "$1" || return 
+	# busca por id
+	local user=$(egrep -v "^#|^$" "banco.txt" | sort -h | cut -d : -f 1,2 | sed 's/:/ "/;s/$/"/')
+	local id_user=$(eval dialog --stdout --menu \"Escolha um usuario:\" 0 0 0 $user)
 
-	grep -i -v "$1$SEP" "$DATABASE" > "$TEMP"
+	# remove
+	grep -i -v "^$id_user$SEP" "$DATABASE" > "$TEMP"
 	mv "$TEMP" "$DATABASE"
 
-	echo -e "${MSGN_SUCESS}Usuario excluido"
-	OrderList
+	dialog --msgbox "Excluido!!" 6 40
+	ListUser
 }
 
 OrderList(){
@@ -90,4 +92,20 @@ OrderList(){
 # ------------------------------------------------------------------------ #
 
 # ------------------------------- EXECUÇÃO ----------------------------------------- #
+while :
+do
+	action=$(dialog --title "Sistema Usuarios" \
+					--stdout \
+					--menu "Escolha uma das opções abaixo:" \
+					0 0 0 \
+					listar "Lista todos usuarios" \
+					remover "Deleta um usuario" \
+					inserir "Inserir um novo usuario")
+
+	case $action in
+		listar)  ListUser ;;
+		inserir) InsertUser ;;
+		remover) DeleteUser ;;
+	esac				
+done
 # ------------------------------------------------------------------------ #
